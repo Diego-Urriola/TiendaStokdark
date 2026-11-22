@@ -1,5 +1,11 @@
-import { useState } from 'react';
-import { crearProducto, actualizarProducto, eliminarProducto } from '../data/baseDatos';
+import { useState, useEffect } from 'react';
+import {
+  crearProducto,
+  actualizarProducto,
+  eliminarProducto,
+  getCategorias,
+  getUsuarios,
+} from '../api/api';
 
 const azul = '#0a2a66';
 
@@ -8,9 +14,26 @@ export default function Admin({ productos, onCambio, onVolver }) {
   const [nombre, setNombre] = useState('');
   const [precio, setPrecio] = useState('');
   const [imagen, setImagen] = useState('');
+  const [descripcion, setDescripcion] = useState('');
+  const [stock, setStock] = useState('');
+  const [categoriaId, setCategoriaId] = useState('');
   const [editandoId, setEditandoId] = useState(null);
+  const [categorias, setCategorias] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
+  const [error, setError] = useState('');
 
-  const usuarios = JSON.parse(localStorage.getItem('usuarios')) || [];
+  useEffect(() => {
+    getCategorias()
+      .then((lista) => {
+        setCategorias(lista);
+        if (lista.length > 0) setCategoriaId(String(lista[0].id));
+      })
+      .catch((err) => setError(err.message));
+
+    getUsuarios()
+      .then(setUsuarios)
+      .catch((err) => setError(err.message));
+  }, []);
 
   let masCaro = null;
   for (let i = 0; i < productos.length; i++) {
@@ -23,27 +46,36 @@ export default function Admin({ productos, onCambio, onVolver }) {
     setNombre('');
     setPrecio('');
     setImagen('');
+    setDescripcion('');
+    setStock('');
+    setCategoriaId(categorias.length > 0 ? String(categorias[0].id) : '');
     setEditandoId(null);
   };
 
-  const guardar = (e) => {
+  const guardar = async (e) => {
     e.preventDefault();
+    setError('');
 
     const producto = {
       nombre: nombre,
       precio: Number(precio),
       imagen: imagen,
-      alt: nombre,
+      descripcion: descripcion,
+      stock: Number(stock),
+      categoriaId: Number(categoriaId),
     };
 
-    if (editandoId === null) {
-      crearProducto(producto);
-    } else {
-      actualizarProducto(editandoId, producto);
+    try {
+      if (editandoId === null) {
+        await crearProducto(producto);
+      } else {
+        await actualizarProducto(editandoId, producto);
+      }
+      onCambio();
+      limpiarFormulario();
+    } catch (err) {
+      setError(err.message);
     }
-
-    onCambio();
-    limpiarFormulario();
   };
 
   const editar = (p) => {
@@ -51,12 +83,19 @@ export default function Admin({ productos, onCambio, onVolver }) {
     setNombre(p.nombre);
     setPrecio(p.precio);
     setImagen(p.imagen);
+    setDescripcion(p.descripcion || '');
+    setStock(p.stock);
+    setCategoriaId(String(p.categoriaId));
   };
 
-  const borrar = (id) => {
+  const borrar = async (id) => {
     if (window.confirm('¿Eliminar este producto?')) {
-      eliminarProducto(id);
-      onCambio();
+      try {
+        await eliminarProducto(id);
+        onCambio();
+      } catch (err) {
+        setError(err.message);
+      }
     }
   };
 
@@ -95,6 +134,8 @@ export default function Admin({ productos, onCambio, onVolver }) {
         </div>
 
         <div className="col-12 col-md-9 col-lg-10 p-4">
+          {error && <p className="error">{error}</p>}
+
           {seccion === 'dashboard' && (
             <>
               <h2 style={{ color: azul }}>Dashboard</h2>
@@ -179,15 +220,41 @@ export default function Admin({ productos, onCambio, onVolver }) {
                   onChange={(e) => setImagen(e.target.value)}
                   required
                 />
+                <input
+                  placeholder="Descripción"
+                  value={descripcion}
+                  onChange={(e) => setDescripcion(e.target.value)}
+                />
+                <input
+                  type="number"
+                  placeholder="Stock"
+                  value={stock}
+                  onChange={(e) => setStock(e.target.value)}
+                  required
+                />
+                <select
+                  value={categoriaId}
+                  onChange={(e) => setCategoriaId(e.target.value)}
+                  required
+                >
+                  {categorias.map((c) => (
+                    <option key={c.id} value={c.id}>{c.nombre}</option>
+                  ))}
+                </select>
                 <button type="submit" style={{ backgroundColor: azul, color: 'white' }}>
                   {editandoId === null ? 'Agregar producto' : 'Guardar cambios'}
                 </button>
+                {editandoId !== null && (
+                  <button type="button" className="link" onClick={limpiarFormulario}>
+                    Cancelar
+                  </button>
+                )}
               </form>
 
               <ul className="admin-lista">
                 {productos.map((p) => (
                   <li key={p.id}>
-                    <span>{p.nombre} - ${p.precio}</span>
+                    <span>{p.nombre} - ${p.precio} - Stock: {p.stock}</span>
                     <span>
                       <button className="link" onClick={() => editar(p)}>Editar</button>
                       <button className="link" onClick={() => borrar(p.id)}>Eliminar</button>
@@ -210,13 +277,15 @@ export default function Admin({ productos, onCambio, onVolver }) {
                     <tr>
                       <th>Nombre</th>
                       <th>Correo</th>
+                      <th>Rol</th>
                     </tr>
                   </thead>
                   <tbody>
                     {usuarios.map((u) => (
-                      <tr key={u.email}>
+                      <tr key={u.id}>
                         <td>{u.nombre}</td>
                         <td>{u.email}</td>
+                        <td>{u.rol}</td>
                       </tr>
                     ))}
                   </tbody>
