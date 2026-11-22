@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { registro } from '../api/api';
 
 export default function Registro({ onRegistrado, onIrLogin, onVolver }) {
   const [nombre, setNombre] = useState('');
@@ -6,9 +7,11 @@ export default function Registro({ onRegistrado, onIrLogin, onVolver }) {
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
   const [error, setError] = useState('');
+  const [cargando, setCargando] = useState(false);
 
-  const manejarEnvio = (e) => {
+  const manejarEnvio = async (e) => {
     e.preventDefault();
+    setError('');
 
     if (password.length < 6) {
       setError('la contraseña debe tener al menos 6 caracteres');
@@ -20,17 +23,15 @@ export default function Registro({ onRegistrado, onIrLogin, onVolver }) {
       return;
     }
 
-    const usuarios = JSON.parse(localStorage.getItem('usuarios')) || [];
-
-    if (usuarios.some((u) => u.email === email)) {
-      setError('hay una cuenta con ese correo');
-      return;
+    setCargando(true);
+    try {
+      const datos = await registro(nombre, email, password);
+      onRegistrado(datos);
+    } catch (err) {
+      setError(err.message || 'No se pudo crear la cuenta');
+    } finally {
+      setCargando(false);
     }
-
-    const nuevo = { nombre, email, password };
-    localStorage.setItem('usuarios', JSON.stringify([...usuarios, nuevo]));
-
-    onRegistrado();
   };
 
   return (
@@ -39,40 +40,22 @@ export default function Registro({ onRegistrado, onIrLogin, onVolver }) {
 
       <form onSubmit={manejarEnvio}>
         <label>Nombre</label>
-        <input
-          type="text"
-          value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
-          required
-        />
+        <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} required />
 
         <label>Correo</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
 
         <label>Contraseña</label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
 
         <label>Repetir contraseña</label>
-        <input
-          type="password"
-          value={password2}
-          onChange={(e) => setPassword2(e.target.value)}
-          required
-        />
+        <input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} required />
 
         {error && <p className="error">{error}</p>}
 
-        <button type="submit">Registrarme</button>
+        <button type="submit" disabled={cargando}>
+          {cargando ? 'Creando...' : 'Registrarme'}
+        </button>
       </form>
 
       <p>
