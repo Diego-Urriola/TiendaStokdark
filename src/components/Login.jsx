@@ -1,24 +1,26 @@
 import { useState } from 'react';
+import { login } from '../api/api';
 
 export default function Login({ onLogin, onIrRegistro, onVolver }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [cargando, setCargando] = useState(false);
 
-  const manejarEnvio = (e) => {
+  const manejarEnvio = async (e) => {
     e.preventDefault();
+    setError('');
+    setCargando(true);
 
-    const usuarios = JSON.parse(localStorage.getItem('usuarios')) || [];
-    const encontrado = usuarios.find(
-      (u) => u.email === email && u.password === password
-    );
-
-    if (!encontrado) {
-      setError('Correo o contraseña incorrectos');
-      return;
+    try {
+      // login() llama al backend y guarda el token y el usuario en localStorage
+      const datos = await login(email, password);
+      onLogin(datos); // datos = { token, id, nombre, email, rol }
+    } catch (err) {
+      setError(err.message || 'Correo o contraseña incorrectos');
+    } finally {
+      setCargando(false);
     }
-
-    onLogin(encontrado);
   };
 
   return (
@@ -44,7 +46,9 @@ export default function Login({ onLogin, onIrRegistro, onVolver }) {
 
         {error && <p className="error">{error}</p>}
 
-        <button type="submit">Entrar</button>
+        <button type="submit" disabled={cargando}>
+          {cargando ? 'Entrando...' : 'Entrar'}
+        </button>
       </form>
 
       <p>
