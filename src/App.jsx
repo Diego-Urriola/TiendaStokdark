@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { obtenerProductos } from './data/baseDatos';
+import { useState, useEffect } from 'react';
+import { getProductos, crearBoleta, obtenerUsuario, cerrarSesion as limpiarSesion } from './api/api';
 import ProductCard from './components/ProductCard';
 import Carrito from './components/Carrito';
 import Login from './components/Login';
 import Registro from './components/Registro';
 import Admin from './components/Admin';
+import Vendedor from './components/Vendedor';
 import Detalle from './components/Detalle';
 import Contacto from './components/Contacto';
 import Ofertas from './components/Ofertas';
@@ -13,16 +14,26 @@ import Pago from './components/Pago';
 import PagoError from './components/PagoError';
 
 export default function App() {
-  const [productos, setProductos] = useState(obtenerProductos());
+  const [productos, setProductos] = useState([]);
   const [carrito, setCarrito] = useState([]);
-  const [vista, setVista] = useState('tienda');
+  const [usuario, setUsuario] = useState(() => obtenerUsuario());
+  const [vista, setVista] = useState(() =>
+    obtenerUsuario()?.rol === 'VENDEDOR' ? 'vendedor' : 'tienda'
+  );
   const [productoActual, setProductoActual] = useState(null);
   const [busqueda, setBusqueda] = useState('');
   const [orden, setOrden] = useState('ninguno');
   const [ultimaOrden, setUltimaOrden] = useState(null);
-  const [usuario, setUsuario] = useState(
-    () => JSON.parse(localStorage.getItem('usuarioActual')) || null
-  );
+
+  const actualizarLista = () => {
+    getProductos()
+      .then(setProductos)
+      .catch((err) => console.error('Error cargando productos:', err.message));
+  };
+
+  useEffect(() => {
+    actualizarLista();
+  }, []);
 
   const agregarCarrito = (producto) => {
     setCarrito((prev) => {
@@ -55,54 +66,35 @@ export default function App() {
     setVista('compra');
   };
 
-  const pagar = (datos) => {
-    const numero = Math.floor(Math.random() * 90000000) + 10000000;
-    const nuevaOrden = {
-      ...datos,
-      items: carrito,
-      total: total,
-      numero: numero,
-      codigo: 'ORDER' + numero,
-    };
+  const pagar = async (datos) => {
+    try {
+      const items = carrito.map((p) => ({ productoId: p.id, cantidad: p.cantidad }));
+      const boleta = await crearBoleta(datos, items);
+      setUltimaOrden(boleta);
 
-    setUltimaOrden(nuevaOrden);
+      if (boleta.estado === 'RECHAZADO') {
+        setVista('pagoError');
+        return;
+      }
 
-    if (total > 100000) {
-      setVista('pagoError');
-      return;
+      setCarrito([]);
+      actualizarLista();
+      setVista('pagoCorrecto');
+    } catch (err) {
+      alert(err.message);
     }
-
-    setCarrito([]);
-    setVista('pagoCorrecto');
   };
 
   const iniciarSesion = (user) => {
     setUsuario(user);
-    localStorage.setItem('usuarioActual', JSON.stringify(user));
-    setVista('tienda');
+    setVista(user.rol === 'VENDEDOR' ? 'vendedor' : 'tienda');
   };
 
   const cerrarSesion = () => {
+    limpiarSesion();
     setUsuario(null);
-    localStorage.removeItem('usuarioActual');
-  };
-
-  const entrarAdmin = () => {
-    const clave = prompt('Ingresa la clave de administrador');
-
-    if (clave === null) {
-      return;
-    }
-
-    if (clave === '123') {
-      setVista('admin');
-    } else {
-      alert('Clave incorrecta');
-    }
-  };
-
-  const actualizarLista = () => {
-    setProductos(obtenerProductos());
+    setCarrito([]);
+    setVista('tienda');
   };
 
   const verDetalle = (producto) => {
@@ -122,6 +114,10 @@ export default function App() {
     productosFiltrados = [...productosFiltrados].sort((a, b) => b.precio - a.precio);
   }
 
+  if (usuario?.rol === 'VENDEDOR') {
+    return <Vendedor productos={productos} usuario={usuario} onSalir={cerrarSesion} />;
+  }
+
   if (vista === 'login') {
     return (
       <Login
@@ -135,14 +131,14 @@ export default function App() {
   if (vista === 'registro') {
     return (
       <Registro
-        onRegistrado={() => setVista('login')}
+        onRegistrado={iniciarSesion}
         onIrLogin={() => setVista('login')}
         onVolver={() => setVista('tienda')}
       />
     );
   }
 
-  if (vista === 'admin') {
+  if (vista === 'admin' && usuario?.rol === 'ADMIN') {
     return (
       <Admin
         productos={productos}
@@ -210,7 +206,9 @@ export default function App() {
         {usuario ? (
           <>
             <span>Hola, {usuario.nombre}</span>
-            <button onClick={entrarAdmin}>Administrar</button>
+            {usuario.rol === 'ADMIN' && (
+              <button onClick={() => setVista('admin')}>Administrar</button>
+            )}
             <button onClick={cerrarSesion}>Cerrar sesión</button>
           </>
         ) : (
