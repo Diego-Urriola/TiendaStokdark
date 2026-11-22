@@ -85,6 +85,7 @@ export const eliminarProducto = (id) =>
 
 
 export const getCategorias = () => apiFetch("/categorias");
+export const getUsuarios = () => apiFetch("/usuarios");
 
 
 export const getBoletas = () => apiFetch("/boletas");
